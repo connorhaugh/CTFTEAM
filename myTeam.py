@@ -17,99 +17,18 @@ def createTeam(firstIndex, secondIndex, isRed,
   index numbers.  isRed is True if the red team is being created, and
   will be False if the blue team is being created.
 
-  As a potentially helpful development aid, this function can take
-  additional string-valued keyword arguments ("first" and "second" are
-  such arguments in the case of this function), which will come from
-  the --redOpts and --blueOpts command-line arguments to capture.py.
-  For the nightly contest, however, your team will be created without
-  any extra arguments, so you should make sure that the default
-  behavior is what you want for the nightly contest.
   """
   return [eval(first)(firstIndex), eval(second)(secondIndex)]
 
 ##########
 # Agents #
 ##########
-class RAgent(CaptureAgent):
-  """
-  A base class for reflex agents that chooses score-maximizing actions
-  """
-
-  def registerInitialState(self, gameState):
-    self.start = gameState.getAgentPosition(self.index)
-    CaptureAgent.registerInitialState(self, gameState)
 
 
-  def chooseAction(self, gameState):
+# Our Ofessive Agent
+class OnePac(RAgent):
     """
-    Picks among the actions with the highest Q(s,a).
-    """
-
-    actions = gameState.getLegalActions(self.index)
-
-    # You can profile your evaluation time by uncommenting these lines
-    # start = time.time()
-    values = [self.evaluate(gameState, a) for a in actions]
-    # print 'eval time for agent %d: %.4f' % (self.index, time.time() - start)
-
-    maxValue = max(values)
-    bestActions = [a for a, v in zip(actions, values) if v == maxValue]
-
-    foodLeft = len(self.getFood(gameState).asList())
-
-    if foodLeft <= 2:
-      bestDist = 9999
-      for action in actions:
-        successor = self.getSuccessor(gameState, action)
-        pos2 = successor.getAgentPosition(self.index)
-        dist = self.distancer.getDistance(self.start,pos2)
-        if dist < bestDist:
-          bestAction = action
-          bestDist = dist
-      return bestAction
-
-    return random.choice(bestActions)
-
-  def getSuccessor(self, gameState, action):
-    """
-    Finds the next successor which is a grid position (location tuple).
-    """
-    successor = gameState.generateSuccessor(self.index, action)
-    pos = successor.getAgentState(self.index).getPosition()
-    if pos != nearestPoint(pos):
-      # Only half a grid position was covered
-      return successor.generateSuccessor(self.index, action)
-    else:
-      return successor
-
-  def evaluate(self, gameState, action):
-    """
-    Computes a linear combination of features and feature weights
-    """
-    features = self.getFeatures(gameState, action)
-    weights = self.getWeights(gameState, action)
-    return features * weights
-
-  def getFeatures(self, gameState, action):
-    """
-    Returns a counter of features for the state
-    """
-    features = util.Counter()
-    successor = self.getSuccessor(gameState, action)
-    features['successorScore'] = self.getScore(successor)
-    return features
-
-  def getWeights(self, gameState, action):
-    """
-    Normally, weights do not depend on the gamestate.  They can be either
-    a counter or a dictionary.
-    """
-    return {'successorScore': 1.0}
-
-
-class QAgent(RAgent):
-    """
-    A reflex agent that seeks food. The agent acts based on its extensive training (using q learning), and makes perceptions based on particle filtering. Note that this agent is NOT programmed to play either offense of defense.
+    A reflex agent that seeks food. The agent acts based on its extensive training (using q learning), and makes perceptions based on particle filtering. Note that this agent is NOT programmed to play either offense of defense, but has learned to play offense.
     """
     def registerInitialState(self, gameState):
         self.start = gameState.getAgentPosition(self.index)
@@ -120,6 +39,8 @@ class QAgent(RAgent):
         self.explorationRate = 0.1#Epsilon
         self.learningRate = 0.1# Alpha
         self.discountRate =0.8
+        
+        ##Note: We have not included the wieghts because that's top secret information! If your curious as to what values they have, all we will say is between 0 & 1
         self.weights= {'bias':1.0,'score':1.0,'onDefense':1.0,'closestEnemy':1.0, 'distanceToFood':1.0,'distanceToCapsule':1.0}
 
         # read from a file the wieghts
@@ -129,8 +50,6 @@ class QAgent(RAgent):
         except IOError:
             return
 
-
-## Q Learning stuff!!!
     def getQValue(self, gameState, action):
         """
         Returns Q(state,action)
@@ -155,7 +74,6 @@ class QAgent(RAgent):
         #1 Eats food- AKA food existed before and doesn't now + 20 points
         oldFood= self.getFood(gameState).asList()
         newFood= self.getFood(nextState).asList()
-
         if nextPos in oldFood and nextPos not in newFood:
             reward+=10
 
@@ -170,13 +88,9 @@ class QAgent(RAgent):
         #3 eats a capsule +50 points
         oldCapsules= self.getCapsules(gameState)
         newCapsules= self.getCapsules(nextState)
-
         if nextPos in oldCapsules and nextPos not in newCapsules:
             reward+=40
-
-        if(reward!=0):
-            print('I did a good thing MOm' + str(reward))
-        #print(self.counter)
+ 
         return reward
 
     def computeValueFromQValues(self, gameState):
@@ -200,10 +114,8 @@ class QAgent(RAgent):
     def computeActionFromQValues(self, gameState):
         """
           Compute the best action to take in a state.  Note that if there
-          are no legal actions, which is the case at the terminal state,
-          you should return None.
+          are no legal actions, return None.
         """
-        "*** YOUR CODE HERE ***"
         legalActions = gameState.getLegalActions(self.index)
         #print(legalActions)
         legalActions.remove(Directions.STOP)
@@ -224,8 +136,8 @@ class QAgent(RAgent):
                 hiQ=presentq
             if(presentq==hiQ):
                 highaction.append(action)
-
-
+                
+        #If actions have the same, highest action, chose a random action to tiebreak so that lexiconaly prioritized actions (North before West) are not always chosen.
         return random.choice(highaction)
 
 
@@ -238,11 +150,8 @@ class QAgent(RAgent):
           Compute the action to take in the current state.  With
           probability self.epsilon, we should take a random action and
           take the best policy action otherwise.  Note that if there are
-          no legal actions, which is the case at the terminal state, you
-          should choose None as the action.
-
-          HINT: You might want to use util.flipCoin(prob)
-          HINT: To pick randomly from a list, use random.choice(list)
+          no legal actions, you should choose None as the action.
+          
         """
         # Pick Action
         legalActions = gameState.getLegalActions(self.index)
@@ -261,7 +170,8 @@ class QAgent(RAgent):
     def update(self, gameState, action):
         """
           Update the weights based on the features, using the following formula:
-          #Q(s,a)= Q(s,a) + alpha(R(S) + gamma(max(Q(s',a') - Q(s,a))))
+          #Q(s,a)= Q(s,a) + alpha(R(S) + gamma(max(Q(s',a') - Q(s,a)))). All this function does is computes this function and applies it 
+          to all the features.
 
         """
         "*** YOUR CODE HERE ***"
@@ -346,12 +256,9 @@ class QAgent(RAgent):
         file=open('qlearndata.txt','w')
         file.write(str(self.weights))
 
-class DefensiveAgent(RAgent):
+class TwoPac(RAgent):
   """
-  A reflex agent that keeps its side Pacman-free. Again,
-  this is to give you an idea of what a defensive agent
-  could be like.  It is not the best or only way to make
-  such an agent.
+  A reflex agent that keeps its side Pacman-free.
   """
   def registerInitialState(self, gameState):
     RAgent.registerInitialState(self, gameState)
@@ -445,7 +352,6 @@ class JointParticleFilter:
         same space.
 
         """
-        "*** YOUR CODE HERE ***"
         # locals
         numParticles=self.numParticles
         legalPositions=self.legalPositions
@@ -595,51 +501,3 @@ class ReflexCaptureAgent(CaptureAgent):
     a counter or a dictionary.
     """
     return {'successorScore': 1.0}
-
-class OffensiveReflexAgent(ReflexCaptureAgent):
-  """
-  A reflex agent that seeks food. This is an agent
-  we give you to get an idea of what an offensive agent might look like,
-  but it is by no means the best or only way to build an offensive agent.
-  """
-  def getFeatures(self, gameState, action):
-    features = util.Counter()
-    successor = self.getSuccessor(gameState, action)
-    foodList = self.getFood(successor).asList()    
-    features['successorScore'] = -len(foodList)#self.getScore(successor)
-
-    # everything below is new stuff
-    observation = self.getCurrentObservation()
-    posOfOtherTeam = [observation.getAgentPosition(i) for i in range(observation.getNumAgents()) if i not in gameState.getRedTeamIndices()]
-    # print("My observations on the other agents is: ", posOfOtherTeam)
-    myFoodList = self.getFoodYouAreDefending(gameState).asList()
-    myState = successor.getAgentState(self.index)
-    myPos = myState.getPosition()
-    friendlyPos = [observation.getAgentPosition(i) for i in range(observation.getNumAgents()) if i not in gameState.getBlueTeamIndices() and i != self.index]
-
-
-    #=========================================================================================
-
-    # Compute distance to the nearest food
-
-    if len(foodList) > 0: # This should always be True,  but better safe than sorry
-      myPos = successor.getAgentState(self.index).getPosition()
-      minDistance = min([self.getMazeDistance(myPos, food) for food in foodList])
-      features['distanceToFood'] = minDistance
-
-    # if there is a close enemy ghost, and we are pacman, then we need to make a bee line for the other side
-    enemyDists = [self.getMazeDistance(myPos, enemyPos) for enemyPos in posOfOtherTeam if enemyPos != None]
-    if len(enemyDists) > 0 and myState.isPacman:
-      minDistFromEnemy = min(enemyDists)
-      # get the min dist, and if it is close (within 5), then we dip out of there
-      if minDistFromEnemy <= 5:
-        # we need to make a beeline for the nearest friendly food
-        minDistanceToSide = self.getMazeDistance(myPos, friendlyPos[0])
-        features['retreat'] = minDistanceToSide
-
-
-
-    return features
-
-  def getWeights(self, gameState, action):
-    return {'successorScore': 100, 'distanceToFood': -1, 'retreat': -100}
